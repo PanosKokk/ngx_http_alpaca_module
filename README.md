@@ -10,7 +10,7 @@ and get the libalpaca.so file.
 make
 sudo make install
 ```
-Then add the the `load_module` directive in the top of your `nginx.conf` configuration file:
+Then add the the `load_module` directive to the top of your `nginx.conf` configuration file:
 
 `load_module modules/ngx_http_alpaca_module.so;`
 
