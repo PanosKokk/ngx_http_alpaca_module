@@ -1,0 +1,3 @@
+[submodule "libalpaca"]
+	path = libalpaca
+	url = https://github.com/chatziko/libalpaca
