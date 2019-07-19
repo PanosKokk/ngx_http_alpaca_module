@@ -2,7 +2,7 @@
 
 ## Installation
 
-Before installing the module, you have to compile the [libalpaca](https://github.com/PanosKokk/libalpaca) library,
+Before installing the module, you have to compile the [libalpaca](https://github.com/chatziko/libalpaca) library,
 and get the libalpaca.so file.
 
 ```
