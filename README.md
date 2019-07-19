@@ -2,17 +2,30 @@
 
 ## Installation
 
-Before installing the module, you have to compile the [libalpaca](https://github.com/chatziko/libalpaca) library,
-and get the libalpaca.so file.
+This is a [dynamic module](https://docs.nginx.com/nginx/admin-guide/dynamic-modules/dynamic-modules/) which can be used
+with the nginx already installed in your system (you only need to compile the module, not nginx itself).
 
+First, install cargo, OpenSSL and PCRE. On Ubuntu this can be done with:
 ```
-./configure --add-dynamic-module=$PATH_TO_MODULE --with-ld-opt="-L. $PATH_TO_libalpaca.so"
+sudo apt install cargo libssl-dev libpcre3-dev
+```
+
+Then get the module (with `--recursive` to also fetch `libalpaca`):
+```
+git clone --recursive https://github.com/chatziko/ngx_http_alpaca_module
+```
+
+Finally compile and install
+```
+cd ngx_http_alpaca_module
 make
 sudo make install
 ```
-Then add the the `load_module` directive to the top of your `nginx.conf` configuration file:
-
-`load_module modules/ngx_http_alpaca_module.so;`
+The `load_module` directive needed to enable the module in nginx's config
+will be printed by `make install`, eg:
+```
+load_module /usr/lib/nginx/modules/ngx_http_alpaca_module.so;
+```
 
 ## Directives
 
