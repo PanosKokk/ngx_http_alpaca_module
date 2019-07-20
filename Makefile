@@ -2,11 +2,11 @@
 ifeq (, $(shell which nginx))
     $(error "nginx not found, please install it and make sure it's in PATH")
 endif
-NGX_VER = $(shell nginx -v 2>&1 | grep -oE '[0-9.]+')
-NGX_DIR = build/nginx-$(NGX_VER)
+NGX_VER ?= $(shell nginx -v 2>&1 | grep -oE '[0-9.]+')
+NGX_DIR ?= build/nginx-$(NGX_VER)
 
 # get nginx modules path
-NGX_MODULES_PATH = $(shell nginx -V 2>&1 | grep -oE -- '--modules-path=\S+' | sed 's/--modules-path=//')
+NGX_MODULES_PATH ?= $(shell nginx -V 2>&1 | grep -oE -- '--modules-path=\S+' | sed 's/--modules-path=//')
 
 # get the configuration that nginx was compiled with, then do the following modifications
 # - remove --add-dynamic-module options to avoid building other modules
@@ -14,7 +14,7 @@ NGX_MODULES_PATH = $(shell nginx -V 2>&1 | grep -oE -- '--modules-path=\S+' | se
 # - we add our LD_OPT to the existing --with-ld-opt='...'
 #
 LD_OPT = ..\/..\/libalpaca\/target\/release\/libalpaca.a -lm
-NGX_CONF = $(shell \
+NGX_CONF ?= $(shell \
 	nginx -V 2>&1 | \
 	grep configure | \
 	perl -pe " \
