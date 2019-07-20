@@ -214,8 +214,9 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_chain_t					        *cl;
 
     /* Call the next filter if neither of the ALPaCA versions have been activated */
+    /* But always serve the fake image, even if the configuration does not enable ALPaCA for the /__alpaca_fake_image.png url */
     plcf = ngx_http_get_module_loc_conf(r, ngx_http_alpaca_module);
-    if((plcf->root.len == 0) || (!plcf->prob_enabled && !plcf->deter_enabled)) {
+    if(!is_fake_image(r) && ((plcf->root.len == 0) || (!plcf->prob_enabled && !plcf->deter_enabled))) {
       return ngx_http_next_body_filter(r, in);
     }
 
