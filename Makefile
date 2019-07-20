@@ -31,11 +31,11 @@ NGX_CONF ?= $(shell \
 all: $(NGX_DIR)/objs/ngx_http_alpaca_module.so
 
 # we link libalpaca statically so that we don't need to install libalpaca.so
-libalpaca/target/release/libalpaca.a:
+libalpaca/target/release/libalpaca.a: libalpaca/src/*.rs
 	cd libalpaca && \
 	cargo build --release
 
-$(NGX_DIR)/objs/ngx_http_alpaca_module.so: $(NGX_DIR) libalpaca/target/release/libalpaca.a
+$(NGX_DIR)/objs/ngx_http_alpaca_module.so: $(NGX_DIR) libalpaca/target/release/libalpaca.a ngx_http_alpaca_module.c
 	cd $(NGX_DIR) && \
 	./configure --add-dynamic-module=../.. $(NGX_CONF) && \
 	make modules
