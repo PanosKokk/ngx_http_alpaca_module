@@ -140,6 +140,16 @@ static ngx_http_output_body_filter_pt    ngx_http_next_body_filter;
 
 
 static ngx_int_t
+is_fake_image(ngx_http_request_t *r) {
+  return ngx_strncmp(r->uri.data,"/__alpaca_fake_image.png",24) == 0;
+}
+
+static ngx_int_t
+is_html(ngx_http_request_t *r) {
+  return ngx_strncmp(r->headers_out.content_type.data,"text/html",9) == 0;
+}
+
+static ngx_int_t
 ngx_http_alpaca_header_filter(ngx_http_request_t *r)
 {
     ngx_http_alpaca_loc_conf_t  *plcf;
@@ -148,7 +158,8 @@ ngx_http_alpaca_header_filter(ngx_http_request_t *r)
     plcf = ngx_http_get_module_loc_conf(r, ngx_http_alpaca_module);
 
     /* Call the next filter if neither of the ALPaCA versions have been activated */
-    if ((plcf->root.len == 0) || (!plcf->prob_enabled && !plcf->deter_enabled)) {
+    /* But always serve the fake image, even if the configuration does not enable ALPaCA for the /__alpaca_fake_image.png url */
+    if (!is_fake_image(r) && ((plcf->root.len == 0) || (!plcf->prob_enabled && !plcf->deter_enabled))) {
         return ngx_http_next_header_filter(r);
     }
 
@@ -164,15 +175,13 @@ ngx_http_alpaca_header_filter(ngx_http_request_t *r)
         ctx->size = r->headers_out.content_length_n;
         /* Allocate some space for the whole response if we have an html request */
         /* Note: Content-Type can contain a charset, eg "text/html; charset=utf-8" */
-        if(ngx_strncmp(r->headers_out.content_type.data,"text/html",9) == 0  &&
-           ngx_strncmp(r->uri.data,"/__alpaca_fake_image.png",24)  != 0) {
+        if(is_html(r)  && !is_fake_image(r)) {
           ctx->response = ngx_pcalloc(r->pool,ctx->size + 1);
         }
     }
 
     /* If the fake alpaca image is requested, change the 404 status to 200 */
-    if (ngx_strncmp(r->uri.data,"/__alpaca_fake_image.png",24)  == 0 &&
-        r->args.len != 0) {
+    if (is_fake_image(r) && r->args.len != 0) {
    		r->headers_out.status = 200;
       r->headers_out.content_type.data = (u_char*) "image/png";
       r->headers_out.content_type.len = 9;
@@ -218,7 +227,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     }
 
     /* If the fake alpaca image is requested, change some metadata and pad it. */
-    if (ngx_strncmp(r->uri.data,"/__alpaca_fake_image.png",24)  == 0) {
+    if (is_fake_image(r)) {
       /* Proceed only if there is an ALPaCA GET parameter. */
       if(r->args.len == 0) {
         return ngx_http_next_body_filter(r, in);
@@ -264,8 +273,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     /* If the response is an html, wait until the whole body has been captured and morph it according to ALPaCA */
     /* Note: Content-Type can contain a charset, eg "text/html; charset=utf-8" */
-    if(ngx_strncmp(r->headers_out.content_type.data,"text/html",9) == 0 &&
-        r->headers_out.status != 404) {
+    if(is_html(r) && r->headers_out.status != 404) {
   		//ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "I AM HTML!!!!!!!!  SIZE: %d", r->headers_out.content_length_n);
 
   		/* Iterate through every buffer of the current chain and copy the contents */
