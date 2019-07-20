@@ -47,9 +47,7 @@ $(NGX_DIR):
 
 install: $(NGX_DIR)/objs/ngx_http_alpaca_module.so
 ifeq (, $(NGX_MODULES_PATH))
-	@echo "\nCannot detect the nginx modules dir, please manuall copy\n    $(NGX_DIR)/objs/ngx_http_alpaca_module.so"
-	@echo "there. To enable it add this to your nginx config:\n"
-	@echo "load_module <path-to-nginx-modules>/ngx_http_alpaca_module.so;\n"
+	@echo "\nCannot detect the nginx modules dir, please use:\n\nsudo make install NGX_MODULES_PATH=<path>\n"
 else
 	cp $(NGX_DIR)/objs/ngx_http_alpaca_module.so $(NGX_MODULES_PATH)
 	@echo "\nModule installed, to enable add this to your nginx config:\n"
