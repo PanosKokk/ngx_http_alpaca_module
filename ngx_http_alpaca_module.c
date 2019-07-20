@@ -1,6 +1,7 @@
 #include <ngx_config.h>
 #include <ngx_core.h>
 #include <ngx_http.h>
+#include <ngx_http_core_module.h>
 
 u_char* morph_html_Palpaca(u_char* html,u_char* root,u_char* html_path,u_char* dist_html,u_char* dist_obj_num,u_char* dist_obj_size,ngx_uint_t* html_size);
 u_char* morph_html_Dalpaca(u_char* html,u_char* root,u_char* html_path,ngx_uint_t* obj_num,ngx_uint_t* obj_size,ngx_uint_t* max_obj_size,ngx_uint_t* html_size);
@@ -9,7 +10,6 @@ u_char* morph_object(u_char* kind,u_char* query,ngx_uint_t* obj_size);
 
 
 typedef struct {
-  ngx_str_t 	root;
   ngx_flag_t 	prob_enabled;
   ngx_flag_t 	deter_enabled;
   ngx_uint_t 	obj_num;
@@ -35,13 +35,6 @@ static ngx_int_t ngx_http_alpaca_init(ngx_conf_t *cf);
 
 
 static ngx_command_t  ngx_http_alpaca_commands[] = {
-
-    { ngx_string("alpaca_root"),
-      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
-      ngx_conf_set_str_slot,
-      NGX_HTTP_LOC_CONF_OFFSET,
-      offsetof(ngx_http_alpaca_loc_conf_t, root),
-      NULL },
 
     { ngx_string("alpaca_prob"),
       NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_FLAG,
@@ -159,7 +152,7 @@ ngx_http_alpaca_header_filter(ngx_http_request_t *r)
 
     /* Call the next filter if neither of the ALPaCA versions have been activated */
     /* But always serve the fake image, even if the configuration does not enable ALPaCA for the /__alpaca_fake_image.png url */
-    if (!is_fake_image(r) && ((plcf->root.len == 0) || (!plcf->prob_enabled && !plcf->deter_enabled))) {
+    if (!is_fake_image(r) && !plcf->prob_enabled && !plcf->deter_enabled) {
         return ngx_http_next_header_filter(r);
     }
 
@@ -210,13 +203,16 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_buf_t                   *b;
     ngx_chain_t                  out;
     ngx_http_alpaca_loc_conf_t  *plcf;
+    ngx_http_core_loc_conf_t    *core_plcf;
     ngx_http_alpaca_ctx_t 		  *ctx;
     ngx_chain_t					        *cl;
 
     /* Call the next filter if neither of the ALPaCA versions have been activated */
     /* But always serve the fake image, even if the configuration does not enable ALPaCA for the /__alpaca_fake_image.png url */
     plcf = ngx_http_get_module_loc_conf(r, ngx_http_alpaca_module);
-    if(!is_fake_image(r) && ((plcf->root.len == 0) || (!plcf->prob_enabled && !plcf->deter_enabled))) {
+    core_plcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
+
+    if(!is_fake_image(r) && !plcf->prob_enabled && !plcf->deter_enabled) {
       return ngx_http_next_body_filter(r, in);
     }
 
@@ -285,9 +281,9 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
             *ctx->response  = '\0';
 
-            u_char* root = ngx_pcalloc(r->pool,(plcf->root.len+1)*sizeof(u_char));
-            ngx_memcpy(root,plcf->root.data,plcf->root.len);
-            root[plcf->root.len] = '\0';
+            u_char* root = ngx_pcalloc(r->pool,(core_plcf->root.len+1)*sizeof(u_char));
+            ngx_memcpy(root,core_plcf->root.data,core_plcf->root.len);
+            root[core_plcf->root.len] = '\0';
 
             u_char* html_path = ngx_pcalloc(r->pool,(r->uri.len+1)*sizeof(u_char));
             ngx_memcpy(html_path,r->uri.data,r->uri.len);
@@ -432,7 +428,6 @@ ngx_http_alpaca_merge_loc_conf(ngx_conf_t *cf, void *parent, void *child)
     ngx_http_alpaca_loc_conf_t *prev = parent;
     ngx_http_alpaca_loc_conf_t *conf = child;
 
-    ngx_conf_merge_str_value(conf->root, prev->root, "");
     ngx_conf_merge_value(conf->prob_enabled, prev->prob_enabled, 0);
     ngx_conf_merge_value(conf->deter_enabled, prev->deter_enabled, 0);
     ngx_conf_merge_uint_value(conf->obj_num, prev->obj_num, 0);

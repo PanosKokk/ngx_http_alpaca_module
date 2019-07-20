@@ -25,10 +25,6 @@ load_module /usr/lib/nginx/modules/ngx_http_alpaca_module.so;
 
 ## Directives
 
-- `alpaca_root`
-
-  Provide the nginx root, it has to be the same as the `root` directive.
-
 - `alpaca_prob`
 
   `on` if you want to use the ALPaCA probabilistic version, `off` otherwise.
