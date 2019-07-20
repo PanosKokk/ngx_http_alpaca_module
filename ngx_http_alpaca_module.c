@@ -163,7 +163,8 @@ ngx_http_alpaca_header_filter(ngx_http_request_t *r)
         ngx_http_set_ctx(r, ctx, ngx_http_alpaca_module);
         ctx->size = r->headers_out.content_length_n;
         /* Allocate some space for the whole response if we have an html request */
-        if(ngx_strncmp(r->headers_out.content_type.data,"text/html",r->headers_out.content_type.len) == 0  &&
+        /* Note: Content-Type can contain a charset, eg "text/html; charset=utf-8" */
+        if(ngx_strncmp(r->headers_out.content_type.data,"text/html",9) == 0  &&
            ngx_strncmp(r->uri.data,"/__alpaca_fake_image.png",24)  != 0) {
           ctx->response = ngx_pcalloc(r->pool,ctx->size + 1);
         }
@@ -262,7 +263,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     }
 
     /* If the response is an html, wait until the whole body has been captured and morph it according to ALPaCA */
-    /* Note: Content-Type can contain a charset, eg "text/html; charset=utf-u" */
+    /* Note: Content-Type can contain a charset, eg "text/html; charset=utf-8" */
     if(ngx_strncmp(r->headers_out.content_type.data,"text/html",9) == 0 &&
         r->headers_out.status != 404) {
   		//ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "I AM HTML!!!!!!!!  SIZE: %d", r->headers_out.content_length_n);
