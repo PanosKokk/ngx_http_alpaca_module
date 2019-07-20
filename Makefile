@@ -18,7 +18,7 @@ NGX_CONF ?= $(shell \
 	nginx -V 2>&1 | \
 	grep configure | \
 	perl -pe " \
-		s/configure arguments: //; \
+		s/configure arguments://; \
 		s/--add-dynamic-module=\S+//g; \
 		s/--with-\S+=dynamic//g; \
 		s/--with-ld-opt='/--with-ld-opt='$(LD_OPT) / or s/^/--with-ld-opt='$(LD_OPT)' /; \
