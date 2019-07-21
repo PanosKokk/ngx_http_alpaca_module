@@ -139,7 +139,16 @@ is_fake_image(ngx_http_request_t *r) {
 
 static ngx_int_t
 is_html(ngx_http_request_t *r) {
+    /* Note: Content-Type can contain a charset, eg "text/html; charset=utf-8" */
     return ngx_strncmp(r->headers_out.content_type.data,"text/html",9) == 0;
+}
+
+static ngx_int_t
+is_image(ngx_http_request_t *r) {
+    return
+        ngx_strncmp(r->headers_out.content_type.data,"image/jpeg",r->headers_out.content_type.len) == 0 ||
+        ngx_strncmp(r->headers_out.content_type.data,"image/png",r->headers_out.content_type.len) == 0 ||
+        ngx_strncmp(r->headers_out.content_type.data,"text/css",r->headers_out.content_type.len) == 0;
 }
 
 static ngx_int_t
@@ -167,7 +176,6 @@ ngx_http_alpaca_header_filter(ngx_http_request_t *r)
         ngx_http_set_ctx(r, ctx, ngx_http_alpaca_module);
         ctx->size = r->headers_out.content_length_n;
         /* Allocate some space for the whole response if we have an html request */
-        /* Note: Content-Type can contain a charset, eg "text/html; charset=utf-8" */
         if(is_html(r)  && !is_fake_image(r)) {
             ctx->response = ngx_pcalloc(r->pool,ctx->size + 1);
         }
@@ -269,7 +277,6 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     }
 
     /* If the response is an html, wait until the whole body has been captured and morph it according to ALPaCA */
-    /* Note: Content-Type can contain a charset, eg "text/html; charset=utf-8" */
     if(is_html(r) && r->headers_out.status != 404) {
         //ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "I AM HTML!!!!!!!!  SIZE: %d", r->headers_out.content_length_n);
 
@@ -340,9 +347,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
         /* Do not call the next filter unless the whole html has been captured */
         return NGX_OK;
     }
-    else if(ngx_strncmp(r->headers_out.content_type.data,"image/jpeg",r->headers_out.content_type.len) == 0 ||
-            ngx_strncmp(r->headers_out.content_type.data,"image/png",r->headers_out.content_type.len) == 0 ||
-            ngx_strncmp(r->headers_out.content_type.data,"text/css",r->headers_out.content_type.len) == 0) {
+    else if(is_image(r)) {
 
         /* Proceed only if there is an ALPaCA GET parameter. */
         if(r->args.len == 0) {
