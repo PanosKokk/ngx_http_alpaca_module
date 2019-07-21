@@ -38,11 +38,13 @@ libalpaca/target/release/libalpaca.a: libalpaca/src/*.rs
 $(NGX_DIR)/objs/ngx_http_alpaca_module.so: $(NGX_DIR)/Makefile libalpaca/target/release/libalpaca.a ngx_http_alpaca_module.c
 	cd $(NGX_DIR) && make modules
 
+$(NGX_DIR)/Makefile: $(NGX_DIR) config libalpaca/target/release/libalpaca.a
+	cd $(NGX_DIR) && ./configure --add-dynamic-module=../.. $(NGX_CONF)
+
 # download nginx source from nginx.org
-$(NGX_DIR)/Makefile:
+$(NGX_DIR):
 	mkdir -p build
 	cd build && (wget -O - https://nginx.org/download/nginx-$(NGX_VER).tar.gz | tar -xzf -)
-	cd $(NGX_DIR) && ./configure --add-dynamic-module=../.. $(NGX_CONF)
 
 install: $(NGX_DIR)/objs/ngx_http_alpaca_module.so
 ifeq (, $(NGX_MODULES_PATH))
@@ -54,7 +56,7 @@ else
 endif
 
 clean:
-	rm -f libalpaca/target/release/libalpaca.a $(NGX_DIR)/objs/ngx_http_alpaca_module.so 
+	rm -f libalpaca/target/release/libalpaca.a $(NGX_DIR)/objs/ngx_http_alpaca_module.so  $(NGX_DIR)/Makefile
 
 cleanall:
 	rm -rf libalpaca/target $(NGX_DIR)
