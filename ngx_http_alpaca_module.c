@@ -23,7 +23,9 @@ typedef struct {
 /* Keep a state for each request */
 typedef struct {
     u_char     *response;
+    u_char	   *end;
     ngx_uint_t size;
+    ngx_uint_t capacity;
 } ngx_http_alpaca_ctx_t;
 
 
@@ -174,10 +176,12 @@ ngx_http_alpaca_header_filter(ngx_http_request_t *r)
             return ngx_http_next_header_filter(r);
         }
         ngx_http_set_ctx(r, ctx, ngx_http_alpaca_module);
-        ctx->size = r->headers_out.content_length_n;
         /* Allocate some space for the whole response if we have an html request */
         if(is_html(r)  && !is_fake_image(r)) {
-            ctx->response = ngx_pcalloc(r->pool,ctx->size + 1);
+        	ctx->capacity = (r->headers_out.content_length_n <= 0) ? 1000 : r->headers_out.content_length_n;
+        	ctx->size = 0;
+            ctx->response = ngx_pcalloc(r->pool,ctx->capacity + 1);
+            ctx->end = ctx->response;
         }
     }
 
@@ -278,15 +282,27 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
     /* If the response is an html, wait until the whole body has been captured and morph it according to ALPaCA */
     if(is_html(r) && r->headers_out.status != 404) {
-        //ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "I AM HTML!!!!!!!!  SIZE: %d", r->headers_out.content_length_n);
+    	/* Iterate through every buffer of the current chain and find its content size */
+    	for (cl = in; cl; cl = cl->next) {
+    		ctx->size += (cl->buf->last) - (cl->buf->pos);
+    	}
+
+    	/* Check if we need to allocate more space for the response */
+    	if (ctx->size > ctx->capacity) {
+    		ctx->capacity = (2*ctx->capacity > ctx->size) ? 2*ctx->capacity : ctx->size;
+    		ctx->end = ngx_pcalloc(r->pool,ctx->capacity + 1);
+    		ctx->response = ctx->end;
+    		ctx->end = ngx_copy(ctx->end,ctx->response,(cl->buf->last) - (cl->buf->pos));
+    	}
 
         /* Iterate through every buffer of the current chain and copy the contents */
         for (cl = in; cl; cl = cl->next) {
-            ctx->response = ngx_copy(ctx->response,cl->buf->pos,(cl->buf->last) - (cl->buf->pos));
+            ctx->end = ngx_copy(ctx->end,cl->buf->pos,(cl->buf->last) - (cl->buf->pos));
+
             /* If we reach the last buffer of the response, call ALPaCA */
             if(cl->buf->last_buf) {
 
-                *ctx->response  = '\0';
+                *ctx->end  = '\0';
 
                 u_char* root = ngx_pcalloc(r->pool,(core_plcf->root.len+1)*sizeof(u_char));
                 ngx_memcpy(root,core_plcf->root.data,core_plcf->root.len);
@@ -314,11 +330,11 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     dist_obj_size[plcf->dist_obj_size.len] = '\0';
 
                     /* Call the P-ALPaCA function to morph the html */
-                    morphed_html = morph_html_Palpaca(ctx->response-(ctx->size),root,html_path,dist_html_size, dist_obj_number,dist_obj_size,&ctx->size);
+                    morphed_html = morph_html_Palpaca(ctx->response,root,html_path,dist_html_size, dist_obj_number,dist_obj_size,&ctx->size);
                 }
                 else { // Deterministic version
                     /* Call the D-ALPaCA function to morph the html */
-                    morphed_html = morph_html_Dalpaca(ctx->response-(ctx->size),root,html_path,&plcf->obj_num,&plcf->obj_size,&plcf->max_obj_size,&ctx->size);
+                    morphed_html = morph_html_Dalpaca(ctx->response,root,html_path,&plcf->obj_num,&plcf->obj_size,&plcf->max_obj_size,&ctx->size);
                 }
 
                 ngx_pfree(r->pool,ctx->response);
@@ -354,7 +370,11 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             return ngx_http_next_body_filter(r, in);
         }
 
-            
+        /* Iterate through every buffer of the current chain and find its content size */
+    	for (cl = in; cl; cl = cl->next) {
+    		ctx->size += (cl->buf->last) - (cl->buf->pos);
+    	}
+
         for (cl = in; cl; cl = cl->next) {
             /* If we reach the last buffer of the response, pad the object according to ALPaCA */
             if(cl->buf->last_buf) {
