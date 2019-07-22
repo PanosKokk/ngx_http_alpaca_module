@@ -12,7 +12,7 @@ sudo apt install cargo libssl-dev libpcre3-dev
 
 Then get the module (with `--recursive` to also fetch `libalpaca`), compile and install:
 ```
-git clone --recursive https://github.com/chatziko/ngx_http_alpaca_module
+git clone --recursive https://github.com/PanosKokk/ngx_http_alpaca_module
 cd ngx_http_alpaca_module
 make
 sudo make install
