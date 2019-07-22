@@ -291,6 +291,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     	if (ctx->size > ctx->capacity) {
     		ctx->capacity = (2*ctx->capacity > ctx->size) ? 2*ctx->capacity : ctx->size;
     		ctx->end = ngx_pcalloc(r->pool,ctx->capacity + 1);
+    		ngx_pfree(r->pool,ctx->response);
     		ctx->response = ctx->end;
     		ctx->end = ngx_copy(ctx->end,ctx->response,(cl->buf->last) - (cl->buf->pos));
     	}
