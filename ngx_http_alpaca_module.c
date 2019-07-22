@@ -177,6 +177,7 @@ ngx_http_alpaca_header_filter(ngx_http_request_t *r)
         }
         ngx_http_set_ctx(r, ctx, ngx_http_alpaca_module);
         /* Allocate some space for the whole response if we have an html request */
+
         if(is_html(r)  && !is_fake_image(r)) {
         	ctx->capacity = (r->headers_out.content_length_n <= 0) ? 1000 : r->headers_out.content_length_n;
         	ctx->size = 0;
@@ -283,17 +284,22 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     /* If the response is an html, wait until the whole body has been captured and morph it according to ALPaCA */
     if(is_html(r) && r->headers_out.status != 404) {
     	/* Iterate through every buffer of the current chain and find its content size */
+    	ngx_uint_t curr_chain_size = 0;
     	for (cl = in; cl; cl = cl->next) {
-    		ctx->size += (cl->buf->last) - (cl->buf->pos);
+    		curr_chain_size += (cl->buf->last) - (cl->buf->pos);
     	}
+
+    	ctx->size += curr_chain_size;
 
     	/* Check if we need to allocate more space for the response */
     	if (ctx->size > ctx->capacity) {
-    		ctx->capacity = (2*ctx->capacity > ctx->size) ? 2*ctx->capacity : ctx->size;
+    		ctx->capacity = (2*ctx->capacity > ctx->size) ? (2*ctx->capacity) : ctx->size;
     		ctx->end = ngx_pcalloc(r->pool,ctx->capacity + 1);
+    		u_char *start = ctx->end;
+    		ctx->end = ngx_copy(ctx->end,ctx->response,ctx->size - curr_chain_size);
     		ngx_pfree(r->pool,ctx->response);
-    		ctx->response = ctx->end;
-    		ctx->end = ngx_copy(ctx->end,ctx->response,(cl->buf->last) - (cl->buf->pos));
+    		ctx->response = start;
+    		
     	}
 
         /* Iterate through every buffer of the current chain and copy the contents */
