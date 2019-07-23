@@ -156,6 +156,8 @@ is_image(ngx_http_request_t *r) {
 static ngx_int_t
 ngx_http_alpaca_header_filter(ngx_http_request_t *r)
 {
+    // setenv("RUST_BACKTRACE", "1", 1);        // for rust debugging
+
     ngx_http_alpaca_loc_conf_t  *plcf;
     ngx_http_alpaca_ctx_t *ctx;
 
@@ -344,8 +346,18 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     morphed_html = morph_html_Dalpaca(ctx->response,root,html_path,&plcf->obj_num,&plcf->obj_size,&plcf->max_obj_size,&ctx->size);
                 }
 
-                ngx_pfree(r->pool,ctx->response);
-                //free_memory(morphed_html,&a);
+                if (morphed_html) {
+                    ngx_pfree(r->pool,ctx->response);
+                    //free_memory(morphed_html,&a);
+
+                } else {
+                    // Alpaca failed. This might happen if the content was not really html, eg it was proxied from some upstream server that
+                    // returned gziped content. We log this and return the original content.
+                    //
+                    ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "[Alpaca filter]: could not process html content. If you use proxy_pass, set proxy_set_header Accept-Encoding \"\" so that the upstream server returns raw html, ");
+
+                    morphed_html = ctx->response;
+                }
 
                 /* Return the modified response in a new buffer */
                 b = ngx_calloc_buf(r->pool);
