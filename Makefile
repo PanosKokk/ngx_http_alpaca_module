@@ -1,3 +1,6 @@
+# debug | release
+BUILD_TYPE ?= release
+
 # get nginx version
 ifeq (, $(shell which nginx))
     $(error "nginx not found, please install it and make sure it's in PATH")
@@ -13,7 +16,7 @@ NGX_MODULES_PATH ?= $(shell nginx -V 2>&1 | grep -oE -- '--modules-path=\S+' | s
 # - remove --with-*=dynamic, again to avoid building other modules
 # - we add our LD_OPT to the existing --with-ld-opt='...'
 #
-LD_OPT = ..\/..\/libalpaca\/target\/release\/libalpaca.a -lm
+LD_OPT = ..\/..\/libalpaca\/target\/$(BUILD_TYPE)\/libalpaca.a -lm
 NGX_CONF ?= $(shell \
 	nginx -V 2>&1 | \
 	grep configure | \
@@ -31,14 +34,14 @@ NGX_CONF ?= $(shell \
 all: $(NGX_DIR)/objs/ngx_http_alpaca_module.so
 
 # we link libalpaca statically so that we don't need to install libalpaca.so
-libalpaca/target/release/libalpaca.a: libalpaca/src/*.rs
+libalpaca/target/$(BUILD_TYPE)/libalpaca.a: libalpaca/src/*.rs
 	cd libalpaca && \
-	cargo build --release
+	cargo build $(if $(filter $(BUILD_TYPE),release),--release,)		# use --release if BUILD_TYPE == "release", nothing otherwise
 
-$(NGX_DIR)/objs/ngx_http_alpaca_module.so: $(NGX_DIR)/Makefile libalpaca/target/release/libalpaca.a ngx_http_alpaca_module.c
+$(NGX_DIR)/objs/ngx_http_alpaca_module.so: $(NGX_DIR)/Makefile libalpaca/target/$(BUILD_TYPE)/libalpaca.a ngx_http_alpaca_module.c
 	cd $(NGX_DIR) && make modules
 
-$(NGX_DIR)/Makefile: $(NGX_DIR) config libalpaca/target/release/libalpaca.a
+$(NGX_DIR)/Makefile: $(NGX_DIR) config libalpaca/target/$(BUILD_TYPE)/libalpaca.a
 	cd $(NGX_DIR) && ./configure --add-dynamic-module=../.. $(NGX_CONF)
 
 # download nginx source from nginx.org
@@ -56,7 +59,7 @@ else
 endif
 
 clean:
-	rm -f libalpaca/target/release/libalpaca.a $(NGX_DIR)/objs/ngx_http_alpaca_module.so  $(NGX_DIR)/Makefile
+	rm -f libalpaca/target/$(BUILD_TYPE)/libalpaca.a $(NGX_DIR)/objs/ngx_http_alpaca_module.so  $(NGX_DIR)/Makefile
 
 cleanall:
 	rm -rf libalpaca/target $(NGX_DIR)
