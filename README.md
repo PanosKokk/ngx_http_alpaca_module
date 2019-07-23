@@ -84,28 +84,49 @@ where values are integers and each probability cannot be larger than 1.0. For ex
 5000 0.3
 ```
 
-## Example Configurations
+## Example Configuration
 
-ALPaCA can be used in any context.
-
-If you want to use ALPaCA in a server context the `nginx.conf` file should look like this:
+ALPaCA can be used in both server and location contexts. It can also be used together with `fastcgi_pass`
+(for dynamic content) and `proxy_pass` (for proxying upstream servers), but only if embeded images are
+static and accessible locally. A sample `nginx.conf` is below:
 ```
 server {
     listen       80;
-    server_name  Name;
+    server_name  www.example.com;
     root /var/www;
 
-    alpaca_root /var/www;
-        
-    alpaca_prob off;                                  # Change to 'on' to use the probabilistic method
+    # alpaca can be configured at the server context
+    #
+    alpaca_prob on;                                   # Use the probabilistic method
     alpaca_dist_html_size   /dist/dist1.dist;         # Path to the distribution file, relative to root        
     alpaca_dist_obj_number  Normal/20.0,1.0;          # Known distribution
     alpaca_dist_obj_size    Normal/1071571.0,1000.0;  # Known distribution
-        
-    alpaca_deter on;                                  # The deterministic version is used
-    alpaca_obj_num 5;
-    alpaca_obj_size 50000;
-    alpaca_max_obj_size 100000;
+
+    # but also at a location contenxt
+    #
+    location /foo/ {
+        alpaca_deter on;                              # Use the deterministic method
+        alpaca_obj_num 5;
+        alpaca_obj_size 50000;
+        alpaca_max_obj_size 100000;
+    }
+
+    # It works for dynamically generated content (but embedded images/css need to be static)
+    #
+    location ~ \.php$ {
+        include snippets/fastcgi-php.conf;
+        fastcgi_pass unix:/var/run/php/php7.2-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $request_filename;
+    }
+
+    # It also works with proxy_pass, however embedded images/css still need to be accessible in the local filesystem.
+    #
+    # IMPORTANT: Accept-Encoding should be set to "" so that the upstream server returns raw html
+    #
+    location /proxy/ {
+        proxy_pass http://www.upstream.com/;
+        proxy_set_header Accept-Encoding "";
+    }
 }
 ```
 
