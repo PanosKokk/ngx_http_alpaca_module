@@ -6,7 +6,7 @@
 u_char* morph_html_Palpaca(u_char* html,u_char* root,u_char* html_path,u_char* dist_html,u_char* dist_obj_num,u_char* dist_obj_size,ngx_uint_t* html_size);
 u_char* morph_html_Dalpaca(u_char* html,u_char* root,u_char* html_path,ngx_uint_t* obj_num,ngx_uint_t* obj_size,ngx_uint_t* max_obj_size,ngx_uint_t* html_size);
 u_char* morph_object(u_char* kind,u_char* query,ngx_uint_t* obj_size);
-//void free_memory(u_char* data,ngx_uint_t* size);
+void 	free_memory(u_char* data,ngx_uint_t* size);
 
 
 typedef struct {
@@ -221,6 +221,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
     ngx_http_core_loc_conf_t    *core_plcf;
     ngx_http_alpaca_ctx_t       *ctx;
     ngx_chain_t                 *cl;
+    u_char* 					response; // Response to be sent from the server
 
     /* Call the next filter if neither of the ALPaCA versions have been activated */
     /* But always serve the fake image, even if the configuration does not enable ALPaCA for the /__alpaca_fake_image.png url */
@@ -260,6 +261,12 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
 
         u_char* padding = morph_object(kind,query,&size); // Call ALPaCA to get the padding.
 
+        /* Copy the fake object and free the memory that was allocated in rust using the custom
+        "free memory" funtion. */
+        response = ngx_pcalloc(r->pool,size*sizeof(u_char));
+        ngx_memcpy(response,padding,size);
+        free_memory(padding,&size);
+
         if(size == 0) { // Call the next filter if something went wrong.
             return ngx_http_next_body_filter(r, in);
         }
@@ -270,7 +277,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
             return NGX_ERROR;
         }
         
-        b->pos = padding;
+        b->pos = response;
         b->last = b->pos + size;
         
         b->last_buf = 1;
@@ -347,8 +354,12 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 }
 
                 if (morphed_html) {
+                	/* Copy the morphed html and free the memory that was allocated in rust using the custom
+                	"free memory" funtion. */
+                	response = ngx_pcalloc(r->pool,(ctx->size)*sizeof(u_char));
+                	ngx_memcpy(response,morphed_html,ctx->size);
                     ngx_pfree(r->pool,ctx->response);
-                    //free_memory(morphed_html,&a);
+                    free_memory(morphed_html,&ctx->size);
 
                 } else {
                     // Alpaca failed. This might happen if the content was not really html, eg it was proxied from some upstream server that
@@ -356,7 +367,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     //
                     ngx_log_error(NGX_LOG_ERR, r->connection->log, 0, "[Alpaca filter]: could not process html content. If you use proxy_pass, set proxy_set_header Accept-Encoding \"\" so that the upstream server returns raw html, ");
 
-                    morphed_html = ctx->response;
+                    response = ctx->response;
                 }
 
                 /* Return the modified response in a new buffer */
@@ -365,7 +376,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     return NGX_ERROR;
                 }
                 
-                b->pos = morphed_html;
+                b->pos = response;
                 b->last = b->pos + ctx->size;
 
                 b->last_buf = 1;
@@ -412,7 +423,11 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     return ngx_http_next_body_filter(r, in);
                 }
             
-                //free_memory(padding,&ctx->size);
+            	/* Copy the padding and free the memory that was allocated in rust using the custom
+                "free memory" funtion. */
+                response = ngx_pcalloc(r->pool,(ctx->size)*sizeof(u_char));
+                ngx_memcpy(response,padding,ctx->size);
+                free_memory(padding,&ctx->size);
 
                 /* Return the padding in a new buffer */
                 b = ngx_calloc_buf(r->pool);
@@ -420,7 +435,7 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     return NGX_ERROR;
                 }
                 
-                b->pos = padding;
+                b->pos = response;
                 b->last = b->pos + ctx->size;
                 
                 b->last_buf = 1;
