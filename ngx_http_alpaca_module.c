@@ -3,8 +3,8 @@
 #include <ngx_http.h>
 #include <ngx_http_core_module.h>
 
-u_char* morph_html_Palpaca(u_char* html,u_char* root,u_char* html_path,u_char* dist_html,u_char* dist_obj_num,u_char* dist_obj_size,ngx_uint_t* html_size);
-u_char* morph_html_Dalpaca(u_char* html,u_char* root,u_char* html_path,ngx_uint_t* obj_num,ngx_uint_t* obj_size,ngx_uint_t* max_obj_size,ngx_uint_t* html_size);
+u_char* morph_html_Palpaca(u_char* html,u_char* root,u_char* html_path,u_char* dist_html,u_char* dist_obj_num,u_char* dist_obj_size,ngx_uint_t* html_size, ngx_uint_t* alias);
+u_char* morph_html_Dalpaca(u_char* html,u_char* root,u_char* html_path,ngx_uint_t* obj_num,ngx_uint_t* obj_size,ngx_uint_t* max_obj_size,ngx_uint_t* html_size, ngx_uint_t* alias);
 u_char* morph_object(u_char* kind,u_char* query,ngx_uint_t* obj_size);
 void 	free_memory(u_char* data,ngx_uint_t* size);
 
@@ -328,6 +328,11 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                 ngx_memcpy(html_path,r->uri.data,r->uri.len);
                 html_path[r->uri.len] = '\0';
 
+                ngx_uint_t alias = core_plcf->alias;
+
+                if(alias == NGX_MAX_SIZE_T_VALUE)
+                	alias = 0;
+
                 u_char* morphed_html; // Pointer to the morphed html
                 /* Decide whie version of ALPaCA to call */
                 if(plcf->prob_enabled) { // Probabilistic version
@@ -346,11 +351,11 @@ ngx_http_alpaca_body_filter(ngx_http_request_t *r, ngx_chain_t *in)
                     dist_obj_size[plcf->dist_obj_size.len] = '\0';
 
                     /* Call the P-ALPaCA function to morph the html */
-                    morphed_html = morph_html_Palpaca(ctx->response,root,html_path,dist_html_size, dist_obj_number,dist_obj_size,&ctx->size);
+                    morphed_html = morph_html_Palpaca(ctx->response,root,html_path,dist_html_size, dist_obj_number,dist_obj_size,&ctx->size,&alias);
                 }
                 else { // Deterministic version
                     /* Call the D-ALPaCA function to morph the html */
-                    morphed_html = morph_html_Dalpaca(ctx->response,root,html_path,&plcf->obj_num,&plcf->obj_size,&plcf->max_obj_size,&ctx->size);
+                    morphed_html = morph_html_Dalpaca(ctx->response,root,html_path,&plcf->obj_num,&plcf->obj_size,&plcf->max_obj_size,&ctx->size,&alias);
                 }
 
                 if (morphed_html) {
