@@ -3,11 +3,11 @@
 #include <ngx_http.h>
 #include <ngx_http_core_module.h>
 
-u_char* morph_html_Palpaca(u_char* html, u_char* root, u_char* html_path,
+u_char* morph_html_Palpaca(u_char* html, u_char* root, u_char* html_path, u_char* http_host,
 						   u_char* dist_html, u_char* dist_obj_num,
 						   u_char* dist_obj_size, ngx_uint_t* html_size,
 						   ngx_uint_t alias);
-u_char* morph_html_Dalpaca(u_char* html, u_char* root, u_char* html_path,
+u_char* morph_html_Dalpaca(u_char* html, u_char* root, u_char* html_path, u_char* http_host,
 						   ngx_uint_t obj_num, ngx_uint_t obj_size,
 						   ngx_uint_t max_obj_size, ngx_uint_t* html_size,
 						   ngx_uint_t alias);
@@ -203,6 +203,13 @@ static ngx_int_t ngx_http_alpaca_header_filter(ngx_http_request_t* r) {
 	return ngx_http_next_header_filter(r);
 }
 
+static u_char* copy_ngx_str(ngx_str_t str, ngx_pool_t* pool) {
+	u_char* res = ngx_pcalloc(pool, str.len + 1);
+	ngx_memcpy(res, str.data, str.len);
+	res[str.len] = '\0';
+	return res;
+}
+
 static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 											 ngx_chain_t* in) {
 	ngx_buf_t* b;
@@ -247,11 +254,7 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 		r->headers_out.content_type_len = 9;
 
 		u_char* kind = (u_char*)"image/png";
-
-		u_char* query =
-			ngx_pcalloc(r->pool, (r->args.len + 1) * sizeof(u_char));
-		ngx_memcpy(query, r->args.data, r->args.len);
-		query[r->args.len] = '\0';
+		u_char* query = copy_ngx_str(r->args, r->pool);
 
 		ngx_uint_t size = 0;
 
@@ -323,15 +326,9 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 
 				*ctx->end = '\0';
 
-				u_char* root = ngx_pcalloc(r->pool, (core_plcf->root.len + 1) *
-														sizeof(u_char));
-				ngx_memcpy(root, core_plcf->root.data, core_plcf->root.len);
-				root[core_plcf->root.len] = '\0';
-
-				u_char* html_path =
-					ngx_pcalloc(r->pool, (r->uri.len + 1) * sizeof(u_char));
-				ngx_memcpy(html_path, r->uri.data, r->uri.len);
-				html_path[r->uri.len] = '\0';
+				u_char* root      = copy_ngx_str(core_plcf->root, r->pool);
+				u_char* html_path = copy_ngx_str(r->uri, r->pool);
+				u_char* http_host = copy_ngx_str(r->headers_in.host->value, r->pool);
 
 				ngx_uint_t alias = core_plcf->alias;
 
@@ -343,35 +340,19 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 				if (plcf->prob_enabled) { // Probabilistic version
 
 					/* Prepare the arguments for P-ALPaCA */
-					u_char* dist_html_size =
-						ngx_pcalloc(r->pool, (plcf->dist_html_size.len + 1) *
-												 sizeof(u_char));
-					ngx_memcpy(dist_html_size, plcf->dist_html_size.data,
-							   plcf->dist_html_size.len);
-					dist_html_size[plcf->dist_html_size.len] = '\0';
-
-					u_char* dist_obj_number =
-						ngx_pcalloc(r->pool, (plcf->dist_obj_number.len + 1) *
-												 sizeof(u_char));
-					ngx_memcpy(dist_obj_number, plcf->dist_obj_number.data,
-							   plcf->dist_obj_number.len);
-					dist_obj_number[plcf->dist_obj_number.len] = '\0';
-
-					u_char* dist_obj_size =
-						ngx_pcalloc(r->pool, (plcf->dist_obj_size.len + 1) *
-												 sizeof(u_char));
-					ngx_memcpy(dist_obj_size, plcf->dist_obj_size.data,
-							   plcf->dist_obj_size.len);
-					dist_obj_size[plcf->dist_obj_size.len] = '\0';
+					u_char* dist_html_size  = copy_ngx_str(plcf->dist_html_size, r->pool);
+					u_char* dist_obj_number = copy_ngx_str(plcf->dist_obj_number, r->pool);
+					u_char* dist_obj_size   = copy_ngx_str(plcf->dist_obj_size, r->pool);
 
 					/* Call the P-ALPaCA function to morph the html */
 					morphed_html = morph_html_Palpaca(
-						ctx->response, root, html_path, dist_html_size,
+						ctx->response, root, html_path, http_host, dist_html_size,
 						dist_obj_number, dist_obj_size, &ctx->size, alias);
+
 				} else { // Deterministic version
 					/* Call the D-ALPaCA function to morph the html */
 					morphed_html = morph_html_Dalpaca(
-						ctx->response, root, html_path, plcf->obj_num,
+						ctx->response, root, html_path, http_host, plcf->obj_num,
 						plcf->obj_size, plcf->max_obj_size, &ctx->size,
 						alias);
 				}
@@ -450,11 +431,7 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 						   r->headers_out.content_type.len);
 				kind[r->headers_out.content_type.len] = '\0';
 
-				u_char* query =
-					ngx_pcalloc(r->pool, (r->args.len + 1) * sizeof(u_char));
-				ngx_memcpy(query, r->args.data, r->args.len);
-				query[r->args.len] = '\0';
-
+				u_char* query = copy_ngx_str(r->args, r->pool);
 				u_char* padding = morph_object(
 					kind, query, &ctx->size); // Call ALPaCA to get the padding.
 
