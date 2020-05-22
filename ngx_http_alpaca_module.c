@@ -3,15 +3,32 @@
 #include <ngx_http.h>
 #include <ngx_http_core_module.h>
 
-u_char* morph_html_Palpaca(u_char* html, u_char* root, u_char* html_path, u_char* http_host,
-						   u_char* dist_html, u_char* dist_obj_num,
-						   u_char* dist_obj_size, ngx_uint_t* html_size,
-						   ngx_uint_t alias);
-u_char* morph_html_Dalpaca(u_char* html, u_char* root, u_char* html_path, u_char* http_host,
-						   ngx_uint_t obj_num, ngx_uint_t obj_size,
-						   ngx_uint_t max_obj_size, ngx_uint_t* html_size,
-						   ngx_uint_t alias);
-u_char* morph_object(u_char* kind, u_char* query, ngx_uint_t* obj_size);
+struct MorphInfo {
+    // request info
+    u_char* content;     // i8 = char
+    ngx_uint_t size;
+    u_char* root;
+    u_char* uri;
+    u_char* http_host;
+    ngx_uint_t alias;
+    u_char* query;       // part after ?
+    u_char* content_type;
+
+    ngx_uint_t probabilistic;
+
+    // for probabilistic
+    u_char* dist_html_size;
+    u_char* dist_obj_number;
+    u_char* dist_obj_size;
+
+    // for deterministic
+    ngx_uint_t obj_num;
+    ngx_uint_t obj_size;
+    ngx_uint_t max_obj_size;
+};
+
+u_char morph_html(struct MorphInfo* info);
+u_char morph_object(struct MorphInfo* info);
 void free_memory(u_char* data, ngx_uint_t size);
 
 typedef struct {
@@ -220,10 +237,10 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 	ngx_chain_t* cl;
 	u_char* response; // Response to be sent from the server
 
-	/* Call the next filter if neither of the ALPaCA versions have been
-	 * activated */
-	/* But always serve the fake image, even if the configuration does not
-	 * enable ALPaCA for the /__alpaca_fake_image.png url */
+	// Call the next filter if neither of the ALPaCA versions have been
+	// activated But always serve the fake image, even if the configuration does
+	// not enable ALPaCA for the /__alpaca_fake_image.png url
+	//
 	plcf = ngx_http_get_module_loc_conf(r, ngx_http_alpaca_module);
 	core_plcf = ngx_http_get_module_loc_conf(r, ngx_http_core_module);
 
@@ -250,26 +267,25 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 
 		r->headers_out.status = 200;
 		r->headers_out.content_type.data = (u_char*)"image/png";
-		r->headers_out.content_type.len = 9;
 		r->headers_out.content_type_len = 9;
 
-		u_char* kind = (u_char*)"image/png";
-		u_char* query = copy_ngx_str(r->args, r->pool);
+		struct MorphInfo info = {
+			.content_type = (u_char*)"image/png",
+			.query = copy_ngx_str(r->args, r->pool),
+			.size = 0,
+		};
 
-		ngx_uint_t size = 0;
-
-		u_char* padding =
-			morph_object(kind, query, &size); // Call ALPaCA to get the padding.
-
-		/* Copy the fake object and free the memory that was allocated in rust
-		using the custom "free memory" funtion. */
-		response = ngx_pcalloc(r->pool, size * sizeof(u_char));
-		ngx_memcpy(response, padding, size);
-		free_memory(padding, size);
-
-		if (size == 0) { // Call the next filter if something went wrong.
+		// Call ALPaCA to get the padding.
+		if (!morph_object(&info)) {
+			// Call the next filter if something went wrong.
 			return ngx_http_next_body_filter(r, in);
 		}
+
+		// Copy the fake object and free the memory that was allocated in rust
+		// using the custom "free memory" funtion.
+		response = ngx_pcalloc(r->pool, info.size * sizeof(u_char));
+		ngx_memcpy(response, info.content, info.size);
+		free_memory(info.content, info.size);
 
 		/* Return the padding in a new buffer */
 		b = ngx_calloc_buf(r->pool);
@@ -278,7 +294,7 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 		}
 
 		b->pos = response;
-		b->last = b->pos + size;
+		b->last = b->pos + info.size;
 
 		b->last_buf = 1;
 		b->memory = 1;
@@ -326,45 +342,35 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 
 				*ctx->end = '\0';
 
-				u_char* root      = copy_ngx_str(core_plcf->root, r->pool);
-				u_char* html_path = copy_ngx_str(r->uri, r->pool);
-				u_char* http_host = copy_ngx_str(r->headers_in.host->value, r->pool);
+				struct MorphInfo info = {
+					.root = copy_ngx_str(core_plcf->root, r->pool),
+					.uri = copy_ngx_str(r->uri, r->pool),
+					.http_host = copy_ngx_str(r->headers_in.host->value, r->pool),
+					.content = ctx->response,
+					.size = ctx->size,
+					.alias = core_plcf->alias != NGX_MAX_SIZE_T_VALUE ? core_plcf->alias : 0,
 
-				ngx_uint_t alias = core_plcf->alias;
+					.probabilistic = plcf->prob_enabled,
 
-				if (alias == NGX_MAX_SIZE_T_VALUE)
-					alias = 0;
+					.dist_html_size = copy_ngx_str(plcf->dist_html_size, r->pool),
+					.dist_obj_number = copy_ngx_str(plcf->dist_obj_number, r->pool),
+					.dist_obj_size   = copy_ngx_str(plcf->dist_obj_size, r->pool),
 
-				u_char* morphed_html; // Pointer to the morphed html
-				/* Decide whie version of ALPaCA to call */
-				if (plcf->prob_enabled) { // Probabilistic version
+					.obj_num = plcf->obj_num,
+					.obj_size = plcf->obj_size,
+					.max_obj_size = plcf->max_obj_size,
+				};
 
-					/* Prepare the arguments for P-ALPaCA */
-					u_char* dist_html_size  = copy_ngx_str(plcf->dist_html_size, r->pool);
-					u_char* dist_obj_number = copy_ngx_str(plcf->dist_obj_number, r->pool);
-					u_char* dist_obj_size   = copy_ngx_str(plcf->dist_obj_size, r->pool);
-
-					/* Call the P-ALPaCA function to morph the html */
-					morphed_html = morph_html_Palpaca(
-						ctx->response, root, html_path, http_host, dist_html_size,
-						dist_obj_number, dist_obj_size, &ctx->size, alias);
-
-				} else { // Deterministic version
-					/* Call the D-ALPaCA function to morph the html */
-					morphed_html = morph_html_Dalpaca(
-						ctx->response, root, html_path, http_host, plcf->obj_num,
-						plcf->obj_size, plcf->max_obj_size, &ctx->size,
-						alias);
-				}
-
-				if (morphed_html) {
+				// run alpaca
+				if (morph_html(&info)) {
 					/* Copy the morphed html and free the memory that was
 					allocated in rust using the custom "free memory" funtion. */
-					response =
-						ngx_pcalloc(r->pool, (ctx->size) * sizeof(u_char));
-					ngx_memcpy(response, morphed_html, ctx->size);
+					response = ngx_pcalloc(r->pool, info.size * sizeof(u_char));
+					ngx_memcpy(response, info.content, info.size);
 					ngx_pfree(r->pool, ctx->response);
-					free_memory(morphed_html, ctx->size);
+					free_memory(info.content, info.size);
+
+					ctx->size = info.size;
 
 				} else {
 					// Alpaca failed. This might happen if the content was not
@@ -423,28 +429,25 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 			/* If we reach the last buffer of the response, pad the object
 			 * according to ALPaCA */
 			if (cl->buf->last_buf) {
-
-				u_char* kind =
-					ngx_pcalloc(r->pool, (r->headers_out.content_type.len + 1) *
-											 sizeof(u_char));
-				ngx_memcpy(kind, r->headers_out.content_type.data,
-						   r->headers_out.content_type.len);
-				kind[r->headers_out.content_type.len] = '\0';
-
-				u_char* query = copy_ngx_str(r->args, r->pool);
-				u_char* padding = morph_object(
-					kind, query, &ctx->size); // Call ALPaCA to get the padding.
-
-				if (ctx->size ==
-					0) { // Call the next filter if something went wrong.
+ 				// Call ALPaCA to get the padding.
+				struct MorphInfo info = {
+					.content_type = copy_ngx_str(r->headers_out.content_type, r->pool),
+					.query = copy_ngx_str(r->args, r->pool),
+					.size = ctx->size,
+				};
+					
+				if (!morph_object(&info)) {
+					// Call the next filter if something went wrong.
 					return ngx_http_next_body_filter(r, in);
 				}
 
 				/* Copy the padding and free the memory that was allocated in
 				rust using the custom "free memory" funtion. */
-				response = ngx_pcalloc(r->pool, (ctx->size) * sizeof(u_char));
-				ngx_memcpy(response, padding, ctx->size);
-				free_memory(padding, ctx->size);
+				response = ngx_pcalloc(r->pool, (info.size) * sizeof(u_char));
+				ngx_memcpy(response, info.content, info.size);
+				free_memory(info.content, info.size);
+
+				ctx->size = info.size;
 
 				/* Return the padding in a new buffer */
 				b = ngx_calloc_buf(r->pool);
