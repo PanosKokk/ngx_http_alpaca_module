@@ -18,8 +18,9 @@ struct MorphInfo {
 
     // for probabilistic
     u_char* dist_html_size;
-    u_char* dist_obj_number;
+    u_char* dist_obj_num;
     u_char* dist_obj_size;
+    u_char* dist_total_size;
 
     // for deterministic
     ngx_uint_t obj_num;
@@ -38,8 +39,9 @@ typedef struct {
 	ngx_uint_t obj_size;
 	ngx_uint_t max_obj_size;
 	ngx_str_t dist_html_size;
-	ngx_str_t dist_obj_number;
+	ngx_str_t dist_obj_num;
 	ngx_str_t dist_obj_size;
+	ngx_str_t dist_total_size;
 } ngx_http_alpaca_loc_conf_t;
 
 /* Keep a state for each request */
@@ -94,17 +96,23 @@ static ngx_command_t ngx_http_alpaca_commands[] = {
 	 ngx_conf_set_str_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, dist_html_size), NULL},
 
-	{ngx_string("alpaca_dist_obj_number"),
+	{ngx_string("alpaca_dist_obj_num"),
 	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
 		 NGX_CONF_TAKE1,
 	 ngx_conf_set_str_slot, NGX_HTTP_LOC_CONF_OFFSET,
-	 offsetof(ngx_http_alpaca_loc_conf_t, dist_obj_number), NULL},
+	 offsetof(ngx_http_alpaca_loc_conf_t, dist_obj_num), NULL},
 
 	{ngx_string("alpaca_dist_obj_size"),
 	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
 		 NGX_CONF_TAKE1,
 	 ngx_conf_set_str_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, dist_obj_size), NULL},
+
+	{ngx_string("alpaca_dist_total_size"),
+	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
+		 NGX_CONF_TAKE1,
+	 ngx_conf_set_str_slot, NGX_HTTP_LOC_CONF_OFFSET,
+	 offsetof(ngx_http_alpaca_loc_conf_t, dist_total_size), NULL},
 
 	ngx_null_command};
 
@@ -353,8 +361,9 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 					.probabilistic = plcf->prob_enabled,
 
 					.dist_html_size = copy_ngx_str(plcf->dist_html_size, r->pool),
-					.dist_obj_number = copy_ngx_str(plcf->dist_obj_number, r->pool),
+					.dist_obj_num = copy_ngx_str(plcf->dist_obj_num, r->pool),
 					.dist_obj_size   = copy_ngx_str(plcf->dist_obj_size, r->pool),
+					.dist_total_size = copy_ngx_str(plcf->dist_total_size, r->pool),
 
 					.obj_num = plcf->obj_num,
 					.obj_size = plcf->obj_size,
@@ -506,8 +515,9 @@ static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent,
 	ngx_conf_merge_uint_value(conf->obj_size, prev->obj_size, 0);
 	ngx_conf_merge_uint_value(conf->max_obj_size, prev->max_obj_size, 0);
 	ngx_conf_merge_str_value(conf->dist_html_size, prev->dist_html_size, "");
-	ngx_conf_merge_str_value(conf->dist_obj_number, prev->dist_obj_number, "");
+	ngx_conf_merge_str_value(conf->dist_obj_num, prev->dist_obj_num, "");
 	ngx_conf_merge_str_value(conf->dist_obj_size, prev->dist_obj_size, "");
+	ngx_conf_merge_str_value(conf->dist_total_size, prev->dist_total_size, "");
 
 	/* Check if the directives' arguments are properly set */
 	if ((conf->prob_enabled && conf->deter_enabled)) {
@@ -517,13 +527,13 @@ static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent,
 		return NGX_CONF_ERROR;
 	}
 
-	if (conf->prob_enabled &&
-		((conf->dist_html_size.len == 0) || (conf->dist_obj_number.len == 0) ||
-		 (conf->dist_obj_size.len == 0))) {
-		ngx_conf_log_error(
-			NGX_LOG_EMERG, cf, 0,
-			"You have to provide 3 distributions for probabilistic ALPaCA.");
-		return NGX_CONF_ERROR;
+	if (conf->prob_enabled) {
+		int o = conf->dist_obj_size.len != 0;
+		int t = conf->dist_total_size.len != 0;
+		if ((o && t) || (!o && !t)) {
+			ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "exactly one of dist_obj_size/dist_total_size is needed in probabilistic mode");
+			return NGX_CONF_ERROR;
+		}
 	}
 
 	if (conf->deter_enabled) {

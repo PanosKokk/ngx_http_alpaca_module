@@ -37,13 +37,17 @@ load_module /usr/lib/nginx/modules/ngx_http_alpaca_module.so;
 
   The distribution to be used for the probabilistic version in order to sample the size of the html.
 
-- `alpaca_dist_obj_number`
+- `alpaca_dist_obj_num`
 
-  The distribution to be used for the probabilistic version in order to sample the number of objects in the html.
+  The distribution to sample the number of objects in the html from.
 
 - `alpaca_dist_obj_size`
 
-  The distribution to be used for the probabilistic version in order to sample the size of each object in the html.
+  The distribution to sample the size of each object in the html from.
+
+- `alpaca_dist_total_size`
+
+  The distribution to sample the total size of the page (html + objects) from.
 
 - `alpaca_obj_num`
 
@@ -57,32 +61,33 @@ load_module /usr/lib/nginx/modules/ngx_http_alpaca_module.so;
 
   The max_s parameter for the deterministic version. The size of an ALPaCa fake object cannot exceed this.
 
-The argument for the `alpaca_dist_*` directives can either be a known distribution with its parameters from the list below:
-- LogNormal/mean,std_dev**2
-- Normal/mean,std_dev**2
-- Exp/lambda
-- Poisson/lambda
-- Binomial/n,p
-- Gamma/shape,scale
-
-Or a file which contains values and a probability for each value in ascending probability order. The file's extension has to 
-be `.dist` and its contents have to be like this:
-```
-value1 prob1
-value2 prob2
-valuen probn
-```
-where values are integers and each probability cannot be larger than 1.0. For example:
-```
-4 0.04
-7 0.05
-12 0.06
-18 0.1
-24 0.14
-29 0.15
-35 0.16
-5000 0.3
-```
+The argument for the `alpaca_dist_*` directives can be one of the following:
+- A known distribution with its parameters from the list below:
+  - LogNormal/mean,std_dev**2
+  - Normal/mean,std_dev**2
+  - Exp/lambda
+  - Poisson/lambda
+  - Binomial/n,p
+  - Gamma/shape,scale
+- A file which contains values and a probability for each value in ascending probability order. The file's extension has to 
+  be `.dist` and its contents have to be like this:
+  ```
+  value1 prob1
+  value2 prob2
+  valuen probn
+  ```
+  where values are integers and each probability cannot be larger than 1.0. For example:
+  ```
+  4 0.04
+  7 0.05
+  12 0.06
+  18 0.1
+  24 0.14
+  29 0.15
+  35 0.16
+  5000 0.3
+  ```
+- Empty, which means to use the real value for the corresponding field.
 
 ## Example Configuration
 
@@ -99,7 +104,7 @@ server {
     #
     alpaca_prob on;                                   # Use the probabilistic method
     alpaca_dist_html_size   /dist/dist1.dist;         # Path to the distribution file, relative to root        
-    alpaca_dist_obj_number  Normal/20.0,1.0;          # Known distribution
+    alpaca_dist_obj_num  Normal/20.0,1.0;          # Known distribution
     alpaca_dist_obj_size    Normal/1071571.0,1000.0;  # Known distribution
 
     # but also at a location contenxt
