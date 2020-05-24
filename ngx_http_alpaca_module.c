@@ -20,7 +20,7 @@ struct MorphInfo {
     u_char* dist_html_size;
     u_char* dist_obj_num;
     u_char* dist_obj_size;
-    u_char* dist_total_size;
+    ngx_uint_t use_total_obj_size;
 
     // for deterministic
     ngx_uint_t obj_num;
@@ -41,7 +41,7 @@ typedef struct {
 	ngx_str_t dist_html_size;
 	ngx_str_t dist_obj_num;
 	ngx_str_t dist_obj_size;
-	ngx_str_t dist_total_size;
+	ngx_flag_t use_total_obj_size;
 } ngx_http_alpaca_loc_conf_t;
 
 /* Keep a state for each request */
@@ -73,48 +73,42 @@ static ngx_command_t ngx_http_alpaca_commands[] = {
 	 offsetof(ngx_http_alpaca_loc_conf_t, deter_enabled), NULL},
 
 	{ngx_string("alpaca_obj_num"),
-	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
-		 NGX_CONF_TAKE1,
+	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
 	 ngx_conf_set_num_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, obj_num), NULL},
 
 	{ngx_string("alpaca_obj_size"),
-	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
-		 NGX_CONF_TAKE1,
+	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
 	 ngx_conf_set_num_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, obj_size), NULL},
 
 	{ngx_string("alpaca_max_obj_size"),
-	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
-		 NGX_CONF_TAKE1,
+	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
 	 ngx_conf_set_num_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, max_obj_size), NULL},
 
 	{ngx_string("alpaca_dist_html_size"),
-	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
-		 NGX_CONF_TAKE1,
+	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
 	 ngx_conf_set_str_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, dist_html_size), NULL},
 
 	{ngx_string("alpaca_dist_obj_num"),
-	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
-		 NGX_CONF_TAKE1,
+	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
 	 ngx_conf_set_str_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, dist_obj_num), NULL},
 
 	{ngx_string("alpaca_dist_obj_size"),
-	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
-		 NGX_CONF_TAKE1,
+	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_TAKE1,
 	 ngx_conf_set_str_slot, NGX_HTTP_LOC_CONF_OFFSET,
 	 offsetof(ngx_http_alpaca_loc_conf_t, dist_obj_size), NULL},
 
-	{ngx_string("alpaca_dist_total_size"),
-	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF |
-		 NGX_CONF_TAKE1,
-	 ngx_conf_set_str_slot, NGX_HTTP_LOC_CONF_OFFSET,
-	 offsetof(ngx_http_alpaca_loc_conf_t, dist_total_size), NULL},
+	{ngx_string("alpaca_use_total_obj_size"),
+	 NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
+	 ngx_conf_set_flag_slot, NGX_HTTP_LOC_CONF_OFFSET,
+	 offsetof(ngx_http_alpaca_loc_conf_t, use_total_obj_size), NULL},
 
-	ngx_null_command};
+	ngx_null_command
+};
 
 static ngx_http_module_t ngx_http_alpaca_module_ctx = {
 	NULL,				  /* preconfiguration */
@@ -362,8 +356,8 @@ static ngx_int_t ngx_http_alpaca_body_filter(ngx_http_request_t* r,
 
 					.dist_html_size = copy_ngx_str(plcf->dist_html_size, r->pool),
 					.dist_obj_num = copy_ngx_str(plcf->dist_obj_num, r->pool),
-					.dist_obj_size   = copy_ngx_str(plcf->dist_obj_size, r->pool),
-					.dist_total_size = copy_ngx_str(plcf->dist_total_size, r->pool),
+					.dist_obj_size = copy_ngx_str(plcf->dist_obj_size, r->pool),
+					.use_total_obj_size = plcf->use_total_obj_size,
 
 					.obj_num = plcf->obj_num,
 					.obj_size = plcf->obj_size,
@@ -500,6 +494,7 @@ static void* ngx_http_alpaca_create_loc_conf(ngx_conf_t* cf) {
 	conf->obj_num = NGX_CONF_UNSET_UINT;
 	conf->obj_size = NGX_CONF_UNSET_UINT;
 	conf->max_obj_size = NGX_CONF_UNSET_UINT;
+	conf->use_total_obj_size = NGX_CONF_UNSET;
 
 	return conf;
 }
@@ -517,7 +512,7 @@ static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent,
 	ngx_conf_merge_str_value(conf->dist_html_size, prev->dist_html_size, "");
 	ngx_conf_merge_str_value(conf->dist_obj_num, prev->dist_obj_num, "");
 	ngx_conf_merge_str_value(conf->dist_obj_size, prev->dist_obj_size, "");
-	ngx_conf_merge_str_value(conf->dist_total_size, prev->dist_total_size, "");
+	ngx_conf_merge_value(conf->use_total_obj_size, prev->use_total_obj_size, 0);
 
 	/* Check if the directives' arguments are properly set */
 	if ((conf->prob_enabled && conf->deter_enabled)) {
@@ -527,13 +522,9 @@ static char* ngx_http_alpaca_merge_loc_conf(ngx_conf_t* cf, void* parent,
 		return NGX_CONF_ERROR;
 	}
 
-	if (conf->prob_enabled) {
-		int o = conf->dist_obj_size.len != 0;
-		int t = conf->dist_total_size.len != 0;
-		if ((o && t) || (!o && !t)) {
-			ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "exactly one of dist_obj_size/dist_total_size is needed in probabilistic mode");
-			return NGX_CONF_ERROR;
-		}
+	if (conf->prob_enabled && conf->dist_obj_size.len == 0) {
+		ngx_conf_log_error(NGX_LOG_EMERG, cf, 0, "dist_obj_size is needed in probabilistic mode");
+		return NGX_CONF_ERROR;
 	}
 
 	if (conf->deter_enabled) {

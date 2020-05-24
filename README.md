@@ -63,31 +63,23 @@ load_module /usr/lib/nginx/modules/ngx_http_alpaca_module.so;
 
 The argument for the `alpaca_dist_*` directives can be one of the following:
 - A known distribution with its parameters from the list below:
-  - LogNormal/mean,std_dev**2
-  - Normal/mean,std_dev**2
-  - Exp/lambda
-  - Poisson/lambda
-  - Binomial/n,p
-  - Gamma/shape,scale
+  - `LogNormal/mean,variance`
+  - `Normal/mean,variance`
+  - `Exp/lambda`
+  - `Poisson/lambda`
+  - `Binomial/n,p`
+  - `Gamma/shape,scale`
 - A file which contains values and a probability for each value in ascending probability order. The file's extension has to 
   be `.dist` and its contents have to be like this:
   ```
-  value1 prob1
-  value2 prob2
-  valuen probn
+  prob1 value1 
+  prob2 value2
+  probN valueN
   ```
-  where values are integers and each probability cannot be larger than 1.0. For example:
-  ```
-  4 0.04
-  7 0.05
-  12 0.06
-  18 0.1
-  24 0.14
-  29 0.15
-  35 0.16
-  5000 0.3
-  ```
+  where values are integers and probabilities non-negative summing up to 1.
 - Empty, which means to use the real value for the corresponding field.
+- `Joint` (only for `alpaca_dist_obj_size`), which means that both html and object sizes are
+  drawn from a joint distribution described in `alpaca_dist_html_size` (needs to be a `.dist` file).
 
 ## Example Configuration
 
